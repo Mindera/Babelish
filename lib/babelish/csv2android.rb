@@ -1,3 +1,5 @@
+require 'nokogiri'
+
 module Babelish
   class CSV2Android < Csv2Base
     attr_accessor :file_path
@@ -28,23 +30,28 @@ module Babelish
       value.to_utf8
     end
 
-    def get_row_format(row_key, row_value, comment = nil, indentation = 0)
-      entry = comment.to_s.empty? ? "" : "\n\t<!-- #{comment} -->\n"
-      entry + "\t<string name=\"#{row_key}\">#{row_value}</string>\n"
+    def process_row(resources_node, row_key, row_value, comment = nil)
+      unless comment.to_s.empty?
+        comment_node = Nokogiri::XML::Comment.new(resources_node, comment)
+        resources_node.add_child(comment_node)
+      end
+      string_node = Nokogiri::XML::Node.new("string", resources_node)
+      string_node["name"] = row_key
+      string_node.content = row_value
+      resources_node.add_child(string_node)
     end
 
     def hash_to_output(content = {})
-      output = ''
+      document = Nokogiri::XML::Document.new
       if content && content.size > 0
-        output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-        output += "<resources>\n"
+        resources_node = Nokogiri::XML::Node.new("resources", document)
+        document.add_child(resources_node)
         content.each do |key, value|
           comment = @comments[key]
-          output += get_row_format(key, value, comment)
+          process_row(resources_node, key, value, comment)
         end
-        output += "</resources>\n"
       end
-      return output
+      return document.to_xml
     end
 
     def extension
